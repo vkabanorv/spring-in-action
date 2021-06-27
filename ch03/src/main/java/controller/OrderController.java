@@ -1,7 +1,15 @@
 package controller;
 
 import domain.Order;
+import domain.User;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.Authentication;
+
+
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.validation.Errors;
@@ -20,10 +28,13 @@ import javax.validation.Valid;
 @SessionAttributes("order")
 public class OrderController {
 
+    private OrderProps props;
+
     private OrderRepository orderRepo;
 
-    public OrderController(OrderRepository orderRepo) {
+    public OrderController(OrderRepository orderRepo, OrderProps props) {
         this.orderRepo = orderRepo;
+        this.props = props;
     }
 
     @GetMapping("/current")
@@ -31,12 +42,26 @@ public class OrderController {
         return "orderForm";
     }
 
+    @GetMapping
+    public String ordersForUser(
+            @AuthenticationPrincipal User user, Model model
+    ) {
+        Pageable pageable = PageRequest.of(0, props.getPageSize());
+        model.addAttribute("orders",
+                orderRepo.findByUserOrderByPlacedAtDesc(user, pageable));
+
+        return "orderList";
+    }
+
     @PostMapping
     public String processOrder(@Valid Order order, Errors errors,
-                               SessionStatus sessionStatus) {
+                               SessionStatus sessionStatus,
+                               @AuthenticationPrincipal User user) {
         if (errors.hasErrors()) {
             return "orderForm";
         }
+
+        order.setUser(user);
 
         orderRepo.save(order);
         sessionStatus.setComplete();
